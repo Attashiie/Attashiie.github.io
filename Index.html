@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analisador de Desmatamento com I.A.</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            padding-top: 100%; /* 1:1 Aspect Ratio */
+            background-color: #e5e7eb;
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .placeholder-icon {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #9ca3af;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 antialiased">
+
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl sm:text-4xl font-bold text-gray-900">Analisador de Desmatamento com I.A.</h1>
+            <p class="mt-2 text-md sm:text-lg text-gray-600">APS - Processamento de Imagens e Visão Computacional</p>
+        </header>
+
+        <main class="bg-white rounded-xl shadow-lg p-6">
+            <!-- Seção de Upload e Controles -->
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
+                <div class="flex-grow">
+                    <label for="imageUpload" class="block mb-2 text-sm font-medium text-gray-700">Carregar imagem de satélite (.jpg, .png)</label>
+                    <input type="file" id="imageUpload" accept="image/jpeg, image/png" class="block w-full text-sm text-gray-500
+                        file:mr-4 file:py-2 file:px-4
+                        file:rounded-lg file:border-0
+                        file:text-sm file:font-semibold
+                        file:bg-blue-50 file:text-blue-700
+                        hover:file:bg-blue-100 transition-colors duration-200
+                        cursor-pointer
+                    "/>
+                </div>
+                <button id="analyzeButton" disabled class="w-full sm:w-auto bg-blue-600 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center gap-2">
+                    <svg id="analyzeIcon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                    <svg id="loadingSpinner" class="animate-spin h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span id="buttonText">Analisar Imagem</span>
+                </button>
+            </div>
+
+            <!-- Seção de Visualização -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Imagem Original -->
+                <div>
+                    <h2 class="text-xl font-semibold mb-3 text-center">Imagem Original</h2>
+                    <div id="originalContainer" class="canvas-container border-2 border-dashed border-gray-300">
+                        <div id="originalPlaceholder" class="placeholder-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                        </div>
+                        <canvas id="originalCanvas"></canvas>
+                    </div>
+                </div>
+
+                <!-- Imagem Processada -->
+                <div>
+                    <h2 class="text-xl font-semibold mb-3 text-center">Análise da I.A. (Filtragem)</h2>
+                    <div id="processedContainer" class="canvas-container border-2 border-dashed border-gray-300">
+                         <div id="processedPlaceholder" class="placeholder-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path></svg>
+                        </div>
+                        <canvas id="processedCanvas"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Seção de Resultados -->
+            <div id="resultsContainer" class="mt-8">
+                <div id="resultsSection" class="bg-gray-50 p-6 rounded-lg shadow-inner hidden">
+                    <h3 class="text-2xl font-bold text-center mb-4">Resultados da Análise</h3>
+                    <div class="flex flex-col sm:flex-row justify-around items-center text-center gap-6">
+                        <div class="flex items-center gap-3">
+                            <div class="w-6 h-6 rounded-full" style="background-color: #10B981;"></div>
+                            <div>
+                                <p class="text-sm text-gray-500">Área Florestal</p>
+                                <p id="forestPercentage" class="text-2xl font-bold text-emerald-600">0%</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="w-6 h-6 rounded-full" style="background-color: #EF4444;"></div>
+                            <div>
+                                <p class="text-sm text-gray-500">Área Desmatada</p>
+                                <p id="deforestedPercentage" class="text-2xl font-bold text-red-600">0%</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="w-6 h-6 rounded-full bg-blue-500"></div>
+                             <div>
+                                <p class="text-sm text-gray-500">Rios / Outros</p>
+                                <p id="otherPercentage" class="text-2xl font-bold text-blue-600">0%</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="errorSection" class="bg-red-50 text-red-700 p-4 rounded-lg shadow-inner hidden mt-6">
+                    <h3 class="font-bold text-center">Erro na Análise</h3>
+                    <p id="errorMessage" class="text-center mt-2"></p>
+                </div>
+            </div>
+
+        </main>
+        
+        <footer class="text-center mt-8 text-sm text-gray-500">
+            <p>&copy; 2025 - Projeto de APS. Desenvolvido para fins acadêmicos.</p>
+        </footer>
+    </div>
+
+    <script>
+        // Referências aos elementos do DOM
+        const imageUpload = document.getElementById('imageUpload');
+        const analyzeButton = document.getElementById('analyzeButton');
+        const originalCanvas = document.getElementById('originalCanvas');
+        const processedCanvas = document.getElementById('processedCanvas');
+        const originalPlaceholder = document.getElementById('originalPlaceholder');
+        const processedPlaceholder = document.getElementById('processedPlaceholder');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const resultsSection = document.getElementById('resultsSection');
+        const errorSection = document.getElementById('errorSection');
+        const errorMessage = document.getElementById('errorMessage');
+        const forestPercentage = document.getElementById('forestPercentage');
+        const deforestedPercentage = document.getElementById('deforestedPercentage');
+        const otherPercentage = document.getElementById('otherPercentage');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        const analyzeIcon = document.getElementById('analyzeIcon');
+        const buttonText = document.getElementById('buttonText');
+
+        const originalCtx = originalCanvas.getContext('2d');
+        const processedCtx = processedCanvas.getContext('2d', { willReadFrequently: true });
+
+        let imageLoaded = false;
+        let imageBase64 = null;
+        let imageMimeType = null;
+        let countdownInterval = null;
+
+
+        // Event listener para o upload da imagem
+        imageUpload.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                imageMimeType = file.type;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        // Ajusta o tamanho do canvas para o tamanho da imagem
+                        originalCanvas.width = img.width;
+                        originalCanvas.height = img.height;
+                        processedCanvas.width = img.width;
+                        processedCanvas.height = img.height;
+
+                        // Desenha a imagem no canvas original
+                        originalCtx.drawImage(img, 0, 0);
+                        
+                        // Guarda a imagem em base64
+                        imageBase64 = e.target.result;
+                        
+                        // Esconde o placeholder e habilita o botão
+                        originalPlaceholder.classList.add('hidden');
+                        analyzeButton.disabled = false;
+                        imageLoaded = true;
+                        
+                        // Limpa resultados anteriores
+                        resultsSection.classList.add('hidden');
+                        errorSection.classList.add('hidden');
+                        processedPlaceholder.classList.remove('hidden');
+                        processedCtx.clearRect(0, 0, processedCanvas.width, processedCanvas.height);
+                        if(countdownInterval) clearInterval(countdownInterval);
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+        
+        // Event listener para o botão de análise
+        analyzeButton.addEventListener('click', () => {
+            if (!imageLoaded || !imageBase64) return;
+            
+            // Inicia o processamento com a API
+            analyzeImageWithAPI();
+        });
+
+        // Função para mudar o estado do botão para carregando
+        function setLoadingState(isLoading) {
+            if (isLoading) {
+                analyzeButton.disabled = true;
+                analyzeIcon.classList.add('hidden');
+                loadingSpinner.classList.remove('hidden');
+                buttonText.textContent = 'Analisando...';
+            } else {
+                analyzeButton.disabled = false;
+                analyzeIcon.classList.remove('hidden');
+                loadingSpinner.classList.add('hidden');
+                buttonText.textContent = 'Analisar Imagem';
+            }
+        }
+        
+        function showError(message) {
+            errorMessage.textContent = message;
+            resultsSection.classList.add('hidden');
+            errorSection.classList.remove('hidden');
+            processedPlaceholder.classList.remove('hidden');
+            processedCtx.clearRect(0, 0, processedCanvas.width, processedCanvas.height);
+        }
+
+        function updateUIWithResults(data, imageUrl) {
+            // Exibe os resultados percentuais
+            forestPercentage.textContent = `${(data.forest || 0).toFixed(2)}%`;
+            deforestedPercentage.textContent = `${(data.deforested || 0).toFixed(2)}%`;
+            otherPercentage.textContent = `${(data.other || 0).toFixed(2)}%`;
+            errorSection.classList.add('hidden');
+            resultsSection.classList.remove('hidden');
+
+            // Desenha a imagem processada (filtrada) vinda da API no canvas
+            const img = new Image();
+            img.onload = () => {
+                processedCanvas.width = img.width;
+                processedCanvas.height = img.height;
+                processedCtx.drawImage(img, 0, 0);
+                processedPlaceholder.classList.add('hidden');
+            };
+            img.onerror = () => {
+                showError("Falha ao carregar a imagem de análise gerada pela API.");
+            }
+            img.src = imageUrl;
+        }
+
+        /**
+         * Função que chama a API Gemini para análise de imagem.
+         */
+        async function analyzeImageWithAPI() {
+            setLoadingState(true);
+            resultsSection.classList.add('hidden');
+            errorSection.classList.add('hidden');
+            if(countdownInterval) clearInterval(countdownInterval);
+            
+            // --- INSTRUÇÃO IMPORTANTE PARA TESTE LOCAL ---
+            // Para rodar este arquivo localmente no seu computador, você precisa de uma API Key.
+            // 1. Crie sua chave gratuitamente em: https://aistudio.google.com/app/apikey
+            // 2. Cole a chave na variável 'apiKey' abaixo, entre as aspas.
+            // Exemplo: const apiKey = "SUA_CHAVE_API_AQUI";
+            // Lembre-se de NÃO compartilhar seu código com a chave visível publicamente.
+            // Quando o código é executado na plataforma original, a chave é injetada automaticamente, por isso o valor "" é o correto para aquele ambiente.
+            const apiKey = "AIzaSyDL_LEXUr59oavEda-tzPYSqlvSyVcDbCA"; // <-- COLE SUA CHAVE DA API AQUI PARA TESTE LOCAL
+
+            if (apiKey === "") {
+                showError("Erro de configuração: A chave da API (apiKey) não foi definida. Siga as instruções no código para adicionar sua chave e poder testar localmente.");
+                setLoadingState(false);
+                return;
+            }
+
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${apiKey}`;
+
+            // Extrai os dados base64 puros da URL de dados
+            const base64Data = imageBase64.split(',')[1];
+            
+            const systemPrompt = `**PERFIL:** Você é um sistema especialista em geociências e sensoriamento remoto, operando como um algoritmo de segmentação semântica de altíssima fidelidade. Seu treinamento foi focado em imagens aéreas e de satélite para detecção de mudanças no uso do solo, especificamente para o bioma da Floresta Amazônica.
+
+**TAREFA CRÍTICA E OBJETIVA:** Sua única função é analisar a imagem de satélite fornecida e retornar duas saídas diretas, sem qualquer texto, saudação, ou formatação extra. A precisão dos contornos é o critério mais importante.
+
+**REGRAS DE SAÍDA (NÃO DEVIE):**
+
+1.  **PRIMEIRA 'PART' (DADOS JSON):**
+    * **Formato Obrigatório:** Um único objeto JSON válido.
+    * **Estrutura Rígida:** \`{"forest": <valor>, "deforested": <valor>, "other": <valor>}\`
+    * **Conteúdo:** Apenas o JSON. Nada mais.
+
+2.  **SEGUNDA 'PART' (MÁSCARA DE IMAGEM):**
+    * **Formato:** Uma imagem de máscara de segmentação, com as mesmas dimensões exatas da imagem original.
+    * **Lógica de Classificação por Pixel (ALTA PRECISÃO):**
+        * **VERDE (#10B981) - CLASSE 'FLORESTA':**
+            * **Incluir:** Pixels que representam o dossel (copas das árvores) de floresta primária ou secundária em estágio avançado. A textura deve ser contínua e densa.
+            * **Excluir:** Vegetação baixa, pastagens, ou áreas de reflorestamento muito jovem. Sombras projetadas pelas próprias árvores da floresta devem ser classificadas como floresta.
+
+        * **VERMELHO (#EF4444) - CLASSE 'DESMATADO':**
+            * **Incluir:** Pixels que representam solo exposto (tons de marrom, bege, amarelo ou vermelho), áreas de corte raso (mesmo que com vegetação rasteira ou em regeneração inicial), cicatrizes de queimadas (tons escuros/acinzentados no solo), áreas de mineração a céu aberto, estradas de terra, e qualquer infraestrutura humana (edifícios, pátios) que tenha substituído a cobertura florestal. Pastagens são consideradas desmatadas.
+            * **Contexto:** Uma área marrom/bege cercada por verde denso é um forte indicador de desmatamento recente.
+
+        * **AZUL (#3B82F6) - CLASSE 'OUTROS':**
+            * **Incluir:** Pixels que representam inequivocamente corpos d'água (rios, lagos - geralmente tons escuros ou azulados) e nuvens (tons de branco brilhante).
+            * **Importante:** Sombras projetadas por nuvens sobre a floresta devem ser classificadas como 'Outros' apenas se a cobertura do solo for completamente obscurecida. Se a vegetação ainda for discernível, classifique como floresta.
+
+**PROCESSO DE ANÁLISE HIERÁRQUICA (Execute nesta ordem):**
+1.  **Passo 1 (Máscara de Obstrução):** Identifique e mascare primeiro todos os pixels de 'Outros' (água e nuvens). Eles têm prioridade sobre qualquer outra classe.
+2.  **Passo 2 (Máscara de Desmatamento):** A partir dos pixels restantes, identifique e mascare todas as áreas de 'Desmatado'. Procure por texturas de solo exposto e padrões geométricos (como em agricultura ou lotes).
+3.  **Passo 3 (Máscara de Floresta):** Todos os pixels restantes que não foram classificados nos passos 1 ou 2 devem ser classificados como 'Floresta'.
+4.  **Passo 4 (Cálculo e Geração):** Calcule a porcentagem de pixels para cada classe e construa o JSON. Gere a imagem final da máscara de segmentação combinando as três máscaras.
+
+**FOCO ABSOLUTO: Precisão nos limites e contornos.** A transição entre as classes deve ser nítida e seguir fielmente os limites visíveis na imagem original. Não generalize ou suavize as bordas.`;
+
+            const payload = {
+                contents: [{
+                    parts: [
+                        { text: systemPrompt },
+                        {
+                            inlineData: {
+                                mimeType: imageMimeType,
+                                data: base64Data
+                            }
+                        }
+                    ]
+                }],
+                generationConfig: {
+                    responseModalities: ['TEXT', 'IMAGE']
+                },
+            };
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorBody = await response.json();
+                    throw new Error(`API respondeu com status ${response.status}: ${errorBody.error.message}`);
+                }
+
+                const result = await response.json();
+
+                if (!result.candidates || result.candidates.length === 0) {
+                    const blockReason = result.promptFeedback?.blockReason;
+                    if (blockReason) {
+                        throw new Error(`A solicitação foi bloqueada pela API por segurança. Motivo: ${blockReason}`);
+                    }
+                    throw new Error("A API não retornou uma resposta válida. A imagem pode ter sido recusada.");
+                }
+
+                const candidate = result.candidates[0];
+
+                if (candidate.finishReason && candidate.finishReason !== 'STOP') {
+                    throw new Error(`A análise foi interrompida pela API. Motivo: ${candidate.finishReason}`);
+                }
+
+                if (!candidate.content?.parts || candidate.content.parts.length < 2) {
+                    if (candidate.content?.parts?.length === 1 && candidate.content.parts[0].text) {
+                         throw new Error(`A API retornou uma resposta inesperada (apenas texto): "${candidate.content.parts[0].text}"`);
+                    }
+                    throw new Error("Resposta da API inválida ou incompleta (não contém as partes de texto e imagem esperadas).");
+                }
+
+                const textPart = candidate.content.parts.find(p => p.text);
+                const imagePart = candidate.content.parts.find(p => p.inlineData);
+
+                if (!textPart || !imagePart) {
+                    throw new Error("A resposta da API não contém o texto e a imagem esperados.");
+                }
+
+                // Extração robusta do JSON da resposta de texto
+                const textResponse = textPart.text;
+                const jsonMatch = textResponse.match(/\{[\s\S]*\}/);
+                if (!jsonMatch) {
+                    throw new Error("Nenhum objeto JSON válido foi encontrado na resposta da API.");
+                }
+                const jsonString = jsonMatch[0];
+                const analysisData = JSON.parse(jsonString);
+                
+                const processedBase64 = imagePart.inlineData.data;
+                const processedImageUrl = `data:image/png;base64,${processedBase64}`;
+
+                updateUIWithResults(analysisData, processedImageUrl);
+
+            } catch (error) {
+                console.error("Erro ao chamar a API Gemini:", error);
+                
+                // Tratamento especial para erro de limite de requisições (429)
+                if (error.message.includes('status 429')) {
+                    const retryMatch = error.message.match(/Please retry in (\d+\.\d+)s/);
+                    if (retryMatch && retryMatch[1]) {
+                        let countdown = Math.ceil(parseFloat(retryMatch[1]));
+                        analyzeButton.disabled = true;
+                        
+                        const updateCountdown = () => {
+                            if (countdown > 0) {
+                                showError(`Você atingiu o limite de requisições. Por favor, aguarde ${countdown} segundos para tentar novamente.`);
+                                countdown--;
+                            } else {
+                                clearInterval(countdownInterval);
+                                errorSection.classList.add('hidden');
+                                analyzeButton.disabled = false;
+                            }
+                        };
+                        
+                        updateCountdown(); // Mostra a mensagem inicial imediatamente
+                        countdownInterval = setInterval(updateCountdown, 1000);
+
+                    } else {
+                         showError(`Você atingiu o limite de requisições. Por favor, aguarde um minuto antes de tentar novamente.`);
+                    }
+                } else {
+                    showError(`Falha na comunicação com a IA. Detalhes: ${error.message}`);
+                }
+            } finally {
+                setLoadingState(false);
+            }
+        }
+    </script>
+
+</body>
+</html>
+
