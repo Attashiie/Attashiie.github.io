@@ -66,7 +66,7 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
                 <h2 class="text-xl font-semibold mb-3 text-center">Imagem Original</h2>
-                <div id="originalContainer" class="canvas-container border-2 border-dashed border-gray-300">
+                <div class="canvas-container border-2 border-dashed border-gray-300">
                     <div id="originalPlaceholder" class="placeholder-icon">
                         <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
                     </div>
@@ -75,7 +75,7 @@
             </div>
             <div>
                 <h2 class="text-xl font-semibold mb-3 text-center">Análise da I.A. (Filtragem)</h2>
-                <div id="processedContainer" class="canvas-container border-2 border-dashed border-gray-300">
+                <div class="canvas-container border-2 border-dashed border-gray-300">
                      <div id="processedPlaceholder" class="placeholder-icon">
                         <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path></svg>
                     </div>
@@ -203,22 +203,32 @@
         processedCtx.clearRect(0, 0, processedCanvas.width, processedCanvas.height);
     }
 
-    function updateUIWithResults(data, imageUrl) {
-        forestPercentage.textContent = `${(data.forest || 0).toFixed(2)}%`;
-        deforestedPercentage.textContent = `${(data.deforested || 0).toFixed(2)}%`;
-        otherPercentage.textContent = `${(data.other || 0).toFixed(2)}%`;
-        errorSection.classList.add('hidden');
-        resultsSection.classList.remove('hidden');
+    function generateMaskImage(data) {
+        const { forest, deforested, other } = data;
+        const totalHeight = processedCanvas.height;
+        const totalWidth = processedCanvas.width;
 
-        const img = new Image();
-        img.onload = () => {
-            processedCanvas.width = img.width;
-            processedCanvas.height = img.height;
-            processedCtx.drawImage(img, 0, 0);
-            processedPlaceholder.classList.add('hidden');
-        };
-        img.onerror = () => showError("Falha ao carregar a máscara da análise.");
-        img.src = imageUrl;
+        processedCtx.clearRect(0, 0, totalWidth, totalHeight);
+        let currentY = 0;
+
+        // Floresta (verde)
+        const forestHeight = (forest / 100) * totalHeight;
+        processedCtx.fillStyle = "#10B981";
+        processedCtx.fillRect(0, currentY, totalWidth, forestHeight);
+        currentY += forestHeight;
+
+        // Desmatado (vermelho)
+        const deforestedHeight = (deforested / 100) * totalHeight;
+        processedCtx.fillStyle = "#EF4444";
+        processedCtx.fillRect(0, currentY, totalWidth, deforestedHeight);
+        currentY += deforestedHeight;
+
+        // Outros (azul)
+        const otherHeight = (other / 100) * totalHeight;
+        processedCtx.fillStyle = "#3B82F6";
+        processedCtx.fillRect(0, currentY, totalWidth, otherHeight);
+
+        processedPlaceholder.classList.add("hidden");
     }
 
     async function analyzeImageWithAPI() {
@@ -226,58 +236,60 @@
         resultsSection.classList.add('hidden');
         errorSection.classList.add('hidden');
 
-        const apiKey = "AIzaSyDL_LEXUr59oavEda-tzPYSqlvSyVcDbCA"; // <-- Coloque sua chave da API aqui
+        const apiKey = "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"; // <-- coloque sua chave
         if (!apiKey) {
             showError("Configure sua chave de API primeiro.");
             setLoadingState(false);
             return;
         }
 
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-        const base64Data = imageBase64.split(',')[1];
+        const apiUrl = "https://api.openai.com/v1/chat/completions";
+        const base64Data = imageBase64;
 
         try {
-            // --- JSON ---
-            const responseJSON = await fetch(apiUrl, {
+            const response = await fetch(apiUrl, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { 
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${apiKey}`
+                },
                 body: JSON.stringify({
-                    contents: [{
-                        parts: [
-                            { text: "Analise a imagem e retorne apenas um objeto JSON no formato {\"forest\": <valor>, \"deforested\": <valor>, \"other\": <valor>} com os percentuais de cada classe." },
-                            { inlineData: { mimeType: imageMimeType, data: base64Data } }
-                        ]
-                    }]
+                    model: "gpt-4o-mini",
+                    messages: [
+                        {
+                            role: "system",
+                            content: "Você é um sistema especialista em geociências. Analise imagens de satélite e identifique áreas de floresta, desmatamento e rios/outros."
+                        },
+                        {
+                            role: "user",
+                            content: [
+                                { type: "text", text: "Analise esta imagem e retorne apenas um objeto JSON válido no formato {\"forest\": %, \"deforested\": %, \"other\": %}" },
+                                { type: "image_url", image_url: { url: base64Data } }
+                            ]
+                        }
+                    ],
+                    max_tokens: 300
                 })
             });
 
-            const resultJSON = await responseJSON.json();
-            const textResponse = resultJSON.candidates?.[0]?.content?.parts?.[0]?.text || "";
+            const result = await response.json();
+            console.log("Resposta OpenAI:", result);
+
+            const textResponse = result.choices?.[0]?.message?.content || "";
             const jsonMatch = textResponse.match(/\{[\s\S]*\}/);
             if (!jsonMatch) throw new Error("Não foi possível extrair o JSON da resposta.");
             const analysisData = JSON.parse(jsonMatch[0]);
 
-            // --- Máscara ---
-            const responseImage = await fetch(apiUrl, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    contents: [{
-                        parts: [
-                            { text: "Gere uma máscara de segmentação da imagem com as cores: #10B981 (floresta), #EF4444 (desmatado), #3B82F6 (outros). Retorne apenas a imagem." },
-                            { inlineData: { mimeType: imageMimeType, data: base64Data } }
-                        ]
-                    }],
-                    generationConfig: { responseModalities: ["IMAGE"] }
-                })
-            });
+            // Atualiza os percentuais
+            forestPercentage.textContent = `${(analysisData.forest || 0).toFixed(2)}%`;
+            deforestedPercentage.textContent = `${(analysisData.deforested || 0).toFixed(2)}%`;
+            otherPercentage.textContent = `${(analysisData.other || 0).toFixed(2)}%`;
 
-            const resultImage = await responseImage.json();
-            const imagePart = resultImage.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-            if (!imagePart) throw new Error("A API não retornou a imagem da máscara.");
-            const processedImageUrl = `data:image/png;base64,${imagePart}`;
+            errorSection.classList.add('hidden');
+            resultsSection.classList.remove('hidden');
 
-            updateUIWithResults(analysisData, processedImageUrl);
+            // Gera máscara fake
+            generateMaskImage(analysisData);
 
         } catch (error) {
             console.error("Erro:", error);
